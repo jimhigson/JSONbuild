@@ -23,7 +23,7 @@ var JSON_BUILD = (function(){
 					,	PSEUDO_ATTRIBUTE: pseudoattribute_advice
 					,	STYLES: style_advice
 					,	GATHER: gather_advice }
-	,	pipeline = 	[ build, pseudoattribute_advice, style_advice, gather_advice ];
+	,	pipeline = 	[ gather_advice, firstTextnode_advice, style_advice, pseudoattribute_advice, build ];
 
 //	assigns pipeline.call to a function to call all advisors. 
 //	From end of array (outside) to start (innermost) and back out again.
@@ -109,11 +109,53 @@ var JSON_BUILD = (function(){
 	function pseudoattribute_advice( array, parent_array ){
 	}
 
-	function css_syntax_advice( array ) {
+	function class_combine_advice( array )
+	{
+	}
+
+
+/*	Should be done pre-gathering, Unless gathering knows how to handle multiple
+	values for same attribute name? Eg, could be more than one style set. Hmmm.
+
+	Perhaps gathering should do something special. Like making arrays where the same
+	value is set twice? Eg: {style:[{backgroundColor:red},{borderColor:blue}]
+	Or, say, setting style:fdfad style2:dfdasf style3:dafda	
+
+	should allow attributes like 'style/backgroundColor' or {'style/display':'none'} */
+	function style_advice( array ){
+		
+		var i = array.length
+		,	v;
+
+		while( i-- )
+		{
+			if( array[i].constructor === Object )
+			{				
+				for( k in array[i] )
+				{	
+					v = array[i][k];
+				}
+			}
+		}
+	}
+
+
+/*	allows attributes to be specified with a slash. Eg:
+		{'style/backgroundColor':'red'} and {'notify/click':function(){alert('click')} }
+	are transformed into:
+		{'style':{backgroundColor':'red'}} and {'notify':{'click':function(){alert('click')}}}  */
+	function slashAttribute_advice( obj ) {
+		var k;
+		for( k in obj.attributes ){
+		}
+	}
+
+
+	function css_syntax_advice( obj ) {
 		if( !Object.isString( jml[0] ) )
 			return proceed( jml );
 
-		var pattern = /(^[\w\d-_]+|\.[\w\d-]+|#[\w\d-]+)/g
+		var pattern = /(^\w[\w\d-_]*|\.\w[\w\d-]*|#[\w\d-]+)/g
 		,	css_bits = jml[0].match( pattern );
 
 	//	may have found no matches, in which case skip this bit:
@@ -150,34 +192,14 @@ var JSON_BUILD = (function(){
 
 		return array;
 	}
-
-	function class_combin_advice( array )
+	
+	function firstTextnode_advice( obj )
 	{
-	}
-
-
-/*	Should be done pre-gathering, Unless gathering knows how to handle multiple
-	values for same attribute name? Eg, could be more than one style set. Hmmm.
-
-	Perhaps gathering should do something special. Like making arrays where the same
-	value is set twice? Eg: {style:[{backgroundColor:red},{borderColor:blue}]
-	Or, say, setting style:fdfad style2:dfdasf style3:dafda	
-
-	should allow attributes like 'style/backgroundColor' or {'style/display':'none'} */
-	function style_advice( array ){
-		
-		var i = array.length
-		,	v;
-
-		while( i-- )
-		{
-			if( array[i].constructor === Object )
-			{				
-				for( k in array[i] )
-				{	
-					v = array[i][k];
-				}
-			}
+		var splited = obj.split( ' ', 2 );
+		if( splited.length > 1 )
+		{	
+			obj.tagName = splited[0];
+			obj.children.unshift( splited[1] );
 		}
 	}
 
@@ -186,6 +208,26 @@ var JSON_BUILD = (function(){
 	//		children: 	array of children
 	//		attributes: object of attributes
 	//		tagName
+	//	where collisions on attributes, what to do?
+	//		Perhaps some kind of Combine? Eg, 
+	//			arrays 	=> concat
+	//			String 	=> space sep, 
+	//			Objects => merge
+	//	combinations of more than one type? Eg, style can be string *and* object
+	//		array + string 	- add string to array
+	//		array + object 	- ?
+	//		string + object - ?
+	//
+ 	//	another way might be to look at this as implementing a list (not set) of values.
+	//	in practice, would use numbers (eg style, style2, style3) but conceptually,
+	//	multiple mappings per key
+	//		this has few (no) advantages over auto-arraying
+	//			actually, has advantage that can distinguish between key mapping to 
+	//			values and multiple mappings for same key
+	//
+	//	Alternatively, all attributes could be stored in arrays, regardless of if
+	//	needed or not. Slow but makes things simper. Can traverse.
+	//		{style:[{backgroundColor:'red'},'borderColor:green']}
 	function gather_advice( array ){
 		var i = array.length, j
 		, 	cur
@@ -218,6 +260,23 @@ var JSON_BUILD = (function(){
 		}
 		
 		return out;
+	}
+
+	function wrapper_advice( array, proceed ){
+
+		if( array[0].constructor !== String ){
+			return array;
+		}
+
+		var specs = obj.array[0].split( '/' );
+
+		if( specs.length > 1 ){
+
+			for( var i = 0; i< specs.length; i++ )
+				array = array[];
+		}
+
+		return proceed( array );
 	}
 
 	return JSON_BUILD;
