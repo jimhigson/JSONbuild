@@ -1,3 +1,8 @@
+
+
+/** "Most usage requires you to use just one function.
+*/
+
 var JSON_BUILD = (function(){
 
 
@@ -23,7 +28,11 @@ var JSON_BUILD = (function(){
 					,	PSEUDO_ATTRIBUTE: pseudoattribute_advice
 					,	STYLES: style_advice
 					,	GATHER: gather_advice }
-	,	pipeline = 	[ gather_advice, firstTextnode_advice, style_advice, pseudoattribute_advice, build ];
+
+	,	pipeline = 	[ 	gather_advice, wrapper_advice, multiple_advice, assignment_advice, 
+						firstTextnode_advice, css_syntax_advice, hierarchyAttribute_advice, 
+						listener_advice, style_advice, class_combine_advice, pseudoattribute_advice, 
+						build ];
 
 //	assigns pipeline.call to a function to call all advisors. 
 //	From end of array (outside) to start (innermost) and back out again.
@@ -106,6 +115,10 @@ var JSON_BUILD = (function(){
 		
 	}
 
+/*	eg:
+		{jb-class:'orange-{firstlast} {evenodd}}
+		{jb:{'class':orange-{childno}} 			 */		
+//		requires parent elements
 	function pseudoattribute_advice( array, parent_array ){
 	}
 
@@ -140,13 +153,40 @@ var JSON_BUILD = (function(){
 	}
 
 
+/*	aliases are: notify, listen, events, on
+		eg: {on:{click:function(){}, mouseover:function(){}}}
+	read pre-proceed and add to element post-proceed */
+	function listener_advice( proceed, obj ) {
+		var k, ele, events;
+
+		for( k in obj.attributes ){
+		//	gather into events, delete
+		}
+
+		ele = proceed( obj );
+
+		for( k in events ){
+			listento( ele, k, events[k] );
+		}
+	}
+
+
 /*	allows attributes to be specified with a slash. Eg:
 		{'style/backgroundColor':'red'} and {'notify/click':function(){alert('click')} }
 	are transformed into:
-		{'style':{backgroundColor':'red'}} and {'notify':{'click':function(){alert('click')}}}  */
-	function slashAttribute_advice( obj ) {
-		var k;
+		{'style':{backgroundColor:'red'}} and {'notify':{'click':function(){alert('click')}}}  */
+	function hierarchyAttribute_advice( obj ) {
+		var k, v, 
+			bits;
+
 		for( k in obj.attributes ){
+			if( k.indexOf( '/' ) != -1 ){
+				v = obj.attributes[k];
+
+				bits.split('/', 2);
+				
+				obj[ bits[0] ].push( {bits[1]:v} );
+			}
 		}
 	}
 
@@ -193,14 +233,54 @@ var JSON_BUILD = (function(){
 		return array;
 	}
 	
-	function firstTextnode_advice( obj )
-	{
-		var splited = obj.split( ' ', 2 );
-		if( splited.length > 1 )
-		{	
+
+	function firstTextnode_advice( obj ){
+
+		var splited = obj.split( /\w/, 2 );
+		if( splited.length > 1 ) {	
 			obj.tagName = splited[0];
-			obj.children.unshift( splited[1] );
+		/*	add to start of children string with trailing space removed */
+			obj.children.unshift( splited[1].replace(/^\s+/, '') );
 		}
+	}
+
+/*	Allows tagName to be specified as:
+		'=orange span.foo'
+	or	{'jb-assign':orange}
+
+	The idea is this would be somehow used to assign to variable
+	orange somewhere. Not certain how this works, maybe pass
+	an object into toElement which gets populated?
+
+	to create three of a tagname. This works because a tagName
+	cannot start with a space */
+	function assignment_advice( array, proceed ){
+	}
+
+/*	Allows tagName to be specified as:
+		'3x span.foo'
+	to create three of a tagname. This works because a tagName
+	cannot start with a number */
+	function multiple_advice( array, proceed ){
+	}
+
+/*	Allows tagNames to be specified as:
+		'#foo/span.bar' */
+	function wrapper_advice( array, proceed ){
+
+		if( array[0].constructor !== String ){
+			return array;
+		}
+
+		var specs = obj.array[0].split( '/' );
+
+		if( specs.length > 1 ){
+
+			for( var i = 0; i< specs.length; i++ )			
+				array = [ specs[i], array ];
+		}
+
+		return proceed( array );
 	}
 
 	//	Allows the elements of the array to be specified in any order, without the
@@ -235,25 +315,26 @@ var JSON_BUILD = (function(){
 					,	attributes	:{}
 					};
 
-		if( String === array[0].constructor )
-		{	out.name = array[0]; 
+		if( String === array[0].constructor ) {
+		out.name = array[0]; 
 		}
 
-		while( i-- >= 1 )
-		{	
+		while( i-- >= 1 ){	
+
 			cur = array[i];
 
-			switch( cur.constructor )
-			{	case Array:
+			switch( cur.constructor ) {
+				case Array:
 					for( var j = 0; j < cur.length; j++ )
 					{	out.children.push( cur[ j ] );						
 					}
 					break;
+
 				case Object:
 
 					for( var j in cur )
 					{
-						out.children = cur[  ];
+					//	out.children. = cur[ j ];
 					} 
 					break;
 			}
@@ -262,22 +343,6 @@ var JSON_BUILD = (function(){
 		return out;
 	}
 
-	function wrapper_advice( array, proceed ){
-
-		if( array[0].constructor !== String ){
-			return array;
-		}
-
-		var specs = obj.array[0].split( '/' );
-
-		if( specs.length > 1 ){
-
-			for( var i = 0; i< specs.length; i++ )
-				array = array[];
-		}
-
-		return proceed( array );
-	}
 
 	return JSON_BUILD;
 }());
