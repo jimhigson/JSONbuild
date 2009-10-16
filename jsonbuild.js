@@ -24,19 +24,14 @@ var JSON_BUILD = (function(){
 
 		
 //	stores all the stages	
-	var advisors = 	{ 	BUILD: build 
-					,	PSEUDO_ATTRIBUTE: pseudoattribute_advice
-					,	STYLES: style_advice
-					,	GATHER: gather_advice }
-
-	,	pipeline = 	[ 	gather_advice, wrapper_advice, multiple_advice, assignment_advice, 
-						firstTextnode_advice, css_syntax_advice, hierarchyAttribute_advice, 
+	var pipeline = 	[ 	gather_advice, wrapper_advice, multiple_advice, assignment_advice, 
+						firstTextnode_advice, cssClassId_advice, hierarchyAttribute_advice, 
 						listener_advice, style_advice, class_combine_advice, pseudoattribute_advice, 
-						build ];
+						buildCore ];
 
 //	assigns pipeline.call to a function to call all advisors. 
 //	From end of array (outside) to start (innermost) and back out again.
-	pipeline.compile = function(){
+	pipeline.compile = function() {
 	//	start with the innermost frame (frame zero)
 		pipeline.call = impl( 0 );
 
@@ -66,7 +61,10 @@ var JSON_BUILD = (function(){
 			return pipeline.apply( arguments );
 		}
 
-	,	advisors:advisors
+	,	advisors:{ 	BUILD: build 
+				 ,	PSEUDO_ATTRIBUTE: pseudoattribute_advice
+				 ,	STYLES: style_advice
+				 ,	GATHER: gather_advice }
 
 	/*	need to decide on how to do ordering */
 	,	addAdvice:function( name, func, opts ){
@@ -102,29 +100,54 @@ var JSON_BUILD = (function(){
 				return JSON_BUILD.build( this );
 			}
 		}
-	};
+	}; // end JSON_BUILD
 
 
-	function build( proceed, obj ){
+	function buildCore( proceed, obj, parent_array ) {
+
+		var i, out;
+
 	//	empty arrays create empty document fragements:
-		if( 0 === a.length )
-		{	return document.createDocumentFragment();
+		if( !obj.tagName ){
+			out = document.createDocumentFragment();
+		} else {
+			out = document.createElementById( obj.tagName );
+
+			for( i in obj.attributes ) {
+				out.setAttribute( obj.attributes[i] );
+			}
 		}
 
-		var out = document.createElementById( obj.tagName );
-		
-	}
+		for( i = 0; i < obj.children.length; i++ ) {
+			out.appendChild( JSON_BUILD.build( obj.children[i] ) );
+		}
+	} // end buildCore
+	
 
 /*	eg:
 		{jb-class:'orange-{firstlast} {evenodd}}
 		{jb:{'class':orange-{childno}} 			 */		
-//		requires parent elements
-	function pseudoattribute_advice( array, parent_array ){
-	}
+/*		why not just:
+			class:'orange {first? orange-first} {last? orange-last} {even-odd}'
 
-	function class_combine_advice( array )
-	{
-	}
+			like the above better than the below. More flexible wrt class names,
+			doesn't have to exclude the 'orange-' bit OUTSIDE the brackets.
+
+			class:'orange orange-{first-child} orange-{last-child} {even-odd}'
+		eg, stuff in curly braces gets evaluated in classes?
+				this would never be in a class becuase interferes with
+				css rules (eg, end of the selector, start of the declartion block)
+				this is considerably better!	
+
+		How about class:'foo-{hover? hover}' ?		*/
+//		requires parent elements
+	function pseudoattribute_advice( proceed, obj, parent_array ){
+		return proceed( obj, array, parent_array );
+	} // end pseudoattribute_advice
+
+	function class_combine_advice( proceed, obj, parent_array ){
+		return proceed( obj, array, parent_array );
+	} // end class_combine_advice
 
 
 /*	Should be done pre-gathering, Unless gathering knows how to handle multiple
@@ -135,7 +158,7 @@ var JSON_BUILD = (function(){
 	Or, say, setting style:fdfad style2:dfdasf style3:dafda	
 
 	should allow attributes like 'style/backgroundColor' or {'style/display':'none'} */
-	function style_advice( array ){
+	function style_advice( proceed, obj, parent_array ){
 		
 		var i = array.length
 		,	v;
@@ -150,13 +173,13 @@ var JSON_BUILD = (function(){
 				}
 			}
 		}
-	}
+	} // end style_advice
 
 
 /*	aliases are: notify, listen, events, on
 		eg: {on:{click:function(){}, mouseover:function(){}}}
 	read pre-proceed and add to element post-proceed */
-	function listener_advice( proceed, obj ) {
+	function listener_advice( proceed, obj, parent_array ) {
 		var k, ele, events;
 
 		for( k in obj.attributes ){
@@ -170,71 +193,87 @@ var JSON_BUILD = (function(){
 		}
 	}
 
+	function pseudoattribute_advice( proceed, obj, parent_array ){
+	} // end pseudoattribute_advice
 
-/*	allows attributes to be specified with a slash. Eg:
-		{'style/backgroundColor':'red'} and {'notify/click':function(){alert('click')} }
+/*	allows attributes to be specified with a slash or dot. Eg:
+		{'style/backgroundColor':'red'} and {'notify.click':function(){alert('click')} }		
 	are transformed into:
 		{'style':{backgroundColor:'red'}} and {'notify':{'click':function(){alert('click')}}}  */
-	function hierarchyAttribute_advice( obj ) {
+	function hierarchyAttribute_advice( proceed, obj, parent_array ) {
 		var k, v, 
 			bits;
 
 		for( k in obj.attributes ){
-			if( k.indexOf( '/' ) != -1 ){
+			if( k.indexOf( /[\/\.]/ ) != -1 ){
 				v = obj.attributes[k];
 
-				bits.split('/', 2);
+				bits.split( /[\/\.]/ , 2); // get before, after the / or .
 				
 				obj[ bits[0] ].push( {bits[1]:v} );
 			}
 		}
-	}
+	} // end hierarchyAttribute_advice
 
+/*	One attr per element can be set in the tagName. For when having a
+	hash would be more typing. Eg: 
 
-	function css_syntax_advice( obj ) {
-		if( !Object.isString( jml[0] ) )
-			return proceed( jml );
+		[#addr-field, ['label[for=addr]'], ['input#addr] ] 	*/
+	function singleAttrCss_advice( proceed, obj, parent_array ){
+		
+		var pattern = /blah blah/;
 
-		var pattern = /(^\w[\w\d-_]*|\.\w[\w\d-]*|#[\w\d-]+)/g
-		,	css_bits = jml[0].match( pattern );
+		return proceed( obj, parent_array );
+	} // end singleAttrCss_advice
+
+	function cssClassId_advice( proceed, obj, parent_array ) {
+
+		var pattern = /(^|\.\w[\w\d-]*|#[\w\d-]+)/g
+		,	cssBits = obj.tagName.match( pattern );
 
 	//	may have found no matches, in which case skip this bit:
-		if( !css_bits )
-			return proceed( jml );					
+		if( !cssBits )
+			return proceed( obj, parent_array );
 
-		var	tag_name = 'div' //div is the default tag name
+		var	tagName
 		,	id = ''
-		,	classes = []
-		,	attrs = {};
+		,	classes = [];
 	
-		css_bits.each( function( bit )
-		{
-			switch( bit.charAt(0) )
-			{	case '.':
+		cssBits.each( function( bit ){
+			switch( bit.charAt(0) ){
+				case '.':
 					classes.push( bit.substr(1) );
 					break;
 				case '#':
 					id = bit.substr(1);
 					break;
 				default:				
-					tag_name = bit;						
+					tagName = bit;
 					break;
 			}
 		});
+
+		/*	Need to somehow get the bit that wasn't matched above and set 
+			as tagName. Hmmm. */
 		
 		if( id )
-			attrs.id = id;
-		if( classes.length > 0 )
-			attrs['class'] = classes.join(' '); //array notation - class is reserved word
-		
-		jml[0] = tag_name;
-		jml.push( attrs );
+			obj.attributes.id = id;
 
-		return array;
-	}
+		if( classes.length ){
+
+			classes = classes.join(' ');
+			if( !obj.attributes.class ) {
+				obj.attributes.class = [classes];
+			}else {
+				obj.attributes.class.push( classes );
+			}
+		}
+		
+		return proceed( obj, parent_array );
+	} // end cssClassId_advice
 	
 
-	function firstTextnode_advice( obj ){
+	function firstTextnode_advice( proceed, obj, parent_array ){
 
 		var splited = obj.split( /\w/, 2 );
 		if( splited.length > 1 ) {	
@@ -254,19 +293,66 @@ var JSON_BUILD = (function(){
 
 	to create three of a tagname. This works because a tagName
 	cannot start with a space */
-	function assignment_advice( array, proceed ){
+	function assignment_advice( proceed, obj, parent_array ){
+		return proceed( obj, parent_array );
 	}
 
 /*	Allows tagName to be specified as:
-		'3x span.foo'
+		'span.bar+span.foo'
+	to create two sibblings at once.
+		WHere do contents/attributes go?! */
+	function siblings_advice( proceed, obj, parent_array ){
+		var hit, i, rtn;
+
+		if( hit = /^(\d+)\*(.*)/.exec(obj.tagName) )
+		{
+			rtn = document.createDocumentFragment();
+
+			obj.tagName = hit[2];
+
+			i = hit[1]; // the number
+			while( i-- )
+			{	rtn.appendChild( proceed( obj, parent_array ) );
+			}
+			return rtn;
+		}
+
+		return proceed( obj, parent_array );
+	}
+
+/*	Allows tagName to be specified as:
+		'3*span.foo'
+
+	Usable with callbacks. Eg:
+		['3*div.person', JSON_BUILD.iter( [ 'alison',  'bob', 'ivan' ] ) ];		
+		['50*div.color', {'style/backgroundColor': function(){ return random colour() }} ];
+		['50*div.color', function( something ){ return colour related to something };
+
 	to create three of a tagname. This works because a tagName
 	cannot start with a number */
-	function multiple_advice( array, proceed ){
+	function multiple_advice( proceed, obj, parent_array ){
+		var hit, i, rtn;
+
+		if( hit = /^(\d+)\*(.*)/.exec(obj.tagName) )
+		{
+			rtn = document.createDocumentFragment();
+
+			obj.tagName = hit[2];
+
+			i = hit[1]; // the number
+			while( i-- )
+			{	rtn.appendChild( proceed( obj, parent_array ) );
+			}
+			return rtn;
+		}
+
+		return proceed( obj, parent_array );
 	}
 
 /*	Allows tagNames to be specified as:
-		'#foo/span.bar' */
-	function wrapper_advice( array, proceed ){
+		'#foo/span.bar' (dir syntax)
+	or	'#foo>span.bar' (css syntax)  */
+	function wrapper_advice( proceed, obj, parent_array ){
 
 		if( array[0].constructor !== String ){
 			return array;
@@ -308,7 +394,12 @@ var JSON_BUILD = (function(){
 	//	Alternatively, all attributes could be stored in arrays, regardless of if
 	//	needed or not. Slow but makes things simper. Can traverse.
 	//		{style:[{backgroundColor:'red'},'borderColor:green']}
-	function gather_advice( array ){
+
+/*	Since this is a special case, perhaps it could be built into 
+	JSON_BUILD.toElement() ? 
+
+	No, that wouldn't allow us to add features pre-gather */
+	function gather_advice( proceed, array, parent_obj ){
 		var i = array.length, j
 		, 	cur
 		,	out = 	{	children	:[]
@@ -340,7 +431,7 @@ var JSON_BUILD = (function(){
 			}
 		}
 		
-		return out;
+		return proceed( out, parent_obj );
 	}
 
 
