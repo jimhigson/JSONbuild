@@ -8,19 +8,29 @@ var JSON_BUILD = (function(){
 
 /*	first, a few non-prototype-augmenting (functional rather than OOP) versions of 
 	functions from Prototype */
-	function update(array, args) { //internal function from Prototype's Function.prototype code
-		var arrayLength = array.length, length = args.length;
-		while (length--) array[arrayLength + length] = args[length];
-		return array;
-	}
-/*	This wrap is purely functional - that is, it doesn't care about this and makes
-	no attempt at binding. Once wrapped, all scope is lost. */
-	function wrapFrunction(wrappee, wrapper) {
-		return function() {
-			var a = update(wrappee, arguments);
-			return wrapper.apply( null , a);
-		}
-	}
+ 	var Protofake = (function(){
+
+		return
+		{	funktion: (function() {
+
+				function update(array, args) { //internal function from Prototype's Function.prototype code
+					var arrayLength = array.length, length = args.length;
+					while (length--) array[arrayLength + length] = args[length];
+					return array;
+				}
+
+				return {
+			/*	This wrap is purely functional - that is, it doesn't care about this and makes
+				no attempt at binding. Once wrapped, all scope is lost. */
+					wrap:function(wrappee, wrapper) {
+						return function() {
+							var a = update(wrappee, arguments);
+							return wrapper.apply( null , a);
+						}
+					}
+				};
+			})();	
+	})();
 
 		
 //	stores all the stages	
@@ -44,7 +54,7 @@ var JSON_BUILD = (function(){
 				return frame;
 			} else {				
 			//	return this frame wrapped in the next frame
-				return wrapFunction( frame, impl( i++ ) );
+				return Protofake.funktion.wrap( frame, impl( i++ ) );
 			}
 		}
 	};
