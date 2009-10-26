@@ -11,7 +11,7 @@ var JSON_BUILD = (function(){
  	var Protofake = (function(){
 
 		return
-		{	funktion: (function() {
+		{	'Function': (function() {
 
 				function update(array, args) { //internal function from Prototype's Function.prototype code
 					var arrayLength = array.length, length = args.length;
@@ -34,9 +34,22 @@ var JSON_BUILD = (function(){
 
 		
 //	stores all the stages	
+/*	If buildCore and gather_advice were outside of the pipeline, the line could be executed
+	twice perhaps in the event of functional callbacks. 
+
+	In case where functions return objects with more functions, will probably be necessary to 
+	run pipeline twice 
+
+	This is unless we do functions first (repeatedly until none left), then push through 
+	the pipeline. However, there is a reason I can't remember now why that isn't the best
+	way  
+
+	The pipeline could even contain a method, eg repipeline that detects if another run is 
+	needed and sends again if so */
 	var pipeline = 	[ 	gather_advice, wrapper_advice, multiple_advice, assignment_advice, 
 						firstTextnode_advice, cssClassId_advice, hierarchyAttribute_advice, 
 						listener_advice, style_advice, class_combine_advice, pseudoattribute_advice, 
+						multipleAttribute_advice, 
 						buildCore ];
 
 //	assigns pipeline.call to a function to call all advisors. 
@@ -54,7 +67,7 @@ var JSON_BUILD = (function(){
 				return frame;
 			} else {				
 			//	return this frame wrapped in the next frame
-				return Protofake.funktion.wrap( frame, impl( i++ ) );
+				return Protofake.Function.wrap( frame, impl( i++ ) );
 			}
 		}
 	};
@@ -133,6 +146,10 @@ var JSON_BUILD = (function(){
 		}
 	} // end buildCore
 	
+//	looks for callbacks, executes any that are found 
+	function callback_advice( proceed, obj, parent_array )
+	{
+	} // end of callback_advice
 
 /*	eg:
 		{jb-class:'orange-{firstlast} {evenodd}}
@@ -224,6 +241,15 @@ var JSON_BUILD = (function(){
 			}
 		}
 	} // end hierarchyAttribute_advice
+
+
+/*	allows two attributes to be specified at once. Eg:
+		{event:{ 'click|keypress':function f(){} }}
+	is transformed to:
+		function f(){}; {event:{ click:f, keypress:f }} 	*/
+	function multipleAttribute_advice( proceed, obj, parent_array ){
+	}
+
 
 /*	One attr per element can be set in the tagName. For when having a
 	hash would be more typing. Eg: 
